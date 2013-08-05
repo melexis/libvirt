@@ -1,0 +1,69 @@
+From gren@redhat.com Thu Oct 25 02:44:18 2012
+Received: from int-mx10.intmail.prod.int.phx2.redhat.com
+	(int-mx10.intmail.prod.int.phx2.redhat.com [10.5.11.23])
+	by lists01.pubmisc.prod.ext.phx2.redhat.com (8.13.8/8.13.8) with ESMTP
+	id q9P6iIgT023908 for <libvir-list@listman.util.phx.redhat.com>;
+	Thu, 25 Oct 2012 02:44:18 -0400
+Received: from linux-j6n6.nay.redhat.com ([10.66.17.30])
+	by int-mx10.intmail.prod.int.phx2.redhat.com (8.14.4/8.14.4) with ESMTP
+	id q9P6i6P6014569
+	for <libvir-list@redhat.com>; Thu, 25 Oct 2012 02:44:12 -0400
+From: Guannan Ren <gren@redhat.com>
+To: libvir-list@redhat.com
+Date: Thu, 25 Oct 2012 14:51:38 +0800
+Message-Id: <1351147899-16519-3-git-send-email-gren@redhat.com>
+In-Reply-To: <1351147899-16519-1-git-send-email-gren@redhat.com>
+References: <1351147899-16519-1-git-send-email-gren@redhat.com>
+X-Scanned-By: MIMEDefang 2.68 on 10.5.11.23
+X-loop: libvir-list@redhat.com
+Subject: [libvirt] [PATCH 2/3] apparmor: no need to check security model
+X-BeenThere: libvir-list@redhat.com
+X-Mailman-Version: 2.1.12
+Precedence: junk
+List-Id: Development discussions about the libvirt library & tools
+	<libvir-list.redhat.com>
+List-Unsubscribe: <https://www.redhat.com/mailman/options/libvir-list>,
+	<mailto:libvir-list-request@redhat.com?subject=unsubscribe>
+List-Archive: <https://www.redhat.com/archives/libvir-list>
+List-Post: <mailto:libvir-list@redhat.com>
+List-Help: <mailto:libvir-list-request@redhat.com?subject=help>
+List-Subscribe: <https://www.redhat.com/mailman/listinfo/libvir-list>,
+	<mailto:libvir-list-request@redhat.com?subject=subscribe>
+X-List-Received-Date: Thu, 25 Oct 2012 06:44:18 -0000
+Content-Length: 1346
+Lines: 36
+
+The security model has been set already when allocating and adding
+virSecurityLabelDefPtr struct into virDomainDefPtr, so the value of
+secdef->model is always non-null.
+So error: security label already defined for VM is reported.
+The patch is to remove the checking of its value in If condition clause
+---
+ src/security/security_apparmor.c |    7 +++----
+ 1 files changed, 3 insertions(+), 4 deletions(-)
+
+Index: libvirt-1.0.1/src/security/security_apparmor.c
+===================================================================
+--- libvirt-1.0.1.orig/src/security/security_apparmor.c	2013-01-22 10:43:06.848737309 -0600
++++ libvirt-1.0.1/src/security/security_apparmor.c	2013-01-22 10:43:06.844737309 -0600
+@@ -435,8 +435,7 @@
+         return rc;
+     }
+ 
+-    if ((secdef->label) ||
+-        (secdef->model) || (secdef->imagelabel)) {
++    if ((secdef->label) || (secdef->imagelabel)) {
+         virReportError(VIR_ERR_INTERNAL_ERROR,
+                        "%s",
+                        _("security label already defined for VM"));
+@@ -460,8 +459,8 @@
+         goto err;
+     }
+ 
+-    secdef->model = strdup(SECURITY_APPARMOR_NAME);
+-    if (!secdef->model) {
++    if (!secdef->model &&
++        !(secdef->model = strdup(SECURITY_APPARMOR_NAME))) {
+         virReportOOMError();
+         goto err;
+     }

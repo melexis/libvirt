@@ -1,0 +1,37 @@
+Description: add vnc unix sockets to apparmor policy
+Author: Serge Hallyn <serge.hallyn@ubuntu.com>
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/libvirt/+bug/1069534
+Forwarded: yes
+
+Index: libvirt-1.0.1/src/security/virt-aa-helper.c
+===================================================================
+--- libvirt-1.0.1.orig/src/security/virt-aa-helper.c	2013-01-22 10:43:07.412737299 -0600
++++ libvirt-1.0.1/src/security/virt-aa-helper.c	2013-01-22 10:43:07.408737300 -0600
+@@ -1010,6 +1010,13 @@
+             goto clean;
+     }
+ 
++    for (i = 0; i < ctl->def->ngraphics; i++) {
++        if (ctl->def->graphics[i]->type == VIR_DOMAIN_GRAPHICS_TYPE_VNC &&
++                    ctl->def->graphics[i]->data.vnc.socket &&
++                    vah_add_file(&buf, ctl->def->graphics[i]->data.vnc.socket, "rw"))
++                goto clean;
++    }
++
+     if (ctl->def->ngraphics == 1 &&
+         ctl->def->graphics[0]->type == VIR_DOMAIN_GRAPHICS_TYPE_SDL)
+         if (vah_add_file(&buf, ctl->def->graphics[0]->data.sdl.xauth,
+Index: libvirt-1.0.1/tests/virt-aa-helper-test
+===================================================================
+--- libvirt-1.0.1.orig/tests/virt-aa-helper-test	2013-01-22 10:43:07.412737299 -0600
++++ libvirt-1.0.1/tests/virt-aa-helper-test	2013-01-22 10:43:07.408737300 -0600
+@@ -322,6 +322,9 @@
+ sed -e "s,###UUID###,$uuid,g" -e "s,###DISK###,$disk1,g" -e "s,<graphics.*>,<graphics type='vnc' socket='/var/lib/libvirt/qemu/myself.vnc'><listen type='address' address='0.0.0.0'/></graphics>,g" "$template_xml" > "$test_xml"
+ testme "0" "vnc socket" "-r -u $valid_uuid" "$test_xml"
+ 
++sed -e "s,###UUID###,$uuid,g" -e "s,###DISK###,$disk1,g" -e "s,<graphics.*>,<graphics type='vnc' socket='/var/lib/libvirt/qemu/myself.vnc'><listen type='address' address='0.0.0.0'/></graphics>,g" "$template_xml" > "$test_xml"
++testme "0" "vnc socket" "-r -u $valid_uuid" "$test_xml"
++
+ testme "0" "help" "-h"
+ 
+ echo "" >$output

@@ -1,0 +1,39 @@
+From: Guido Guenther <agx@sigxcpu.org>
+Date: Fri, 7 Mar 2008 09:08:26 +0100
+Subject: Don't enable default network on boot
+
+to not interfere with existing network configurations
+
+---
+ src/Makefile.am |    3 ---
+ src/Makefile.in |    3 ---
+ 2 files changed, 6 deletions(-)
+
+Index: libvirt-1.0.1/src/Makefile.am
+===================================================================
+--- libvirt-1.0.1.orig/src/Makefile.am	2013-01-22 10:43:01.688737396 -0600
++++ libvirt-1.0.1/src/Makefile.am	2013-01-22 10:43:01.676737397 -0600
+@@ -2005,9 +2005,6 @@
+ 	    cp $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml.t \
+ 	      $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml && \
+ 	    rm $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml.t; }
+-	test -e $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/autostart/default.xml || \
+-	   ln -s ../default.xml \
+-	    $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/autostart/default.xml
+ endif
+ 
+ uninstall-local:: uninstall-init uninstall-systemd
+Index: libvirt-1.0.1/src/Makefile.in
+===================================================================
+--- libvirt-1.0.1.orig/src/Makefile.in	2013-01-22 10:43:01.688737396 -0600
++++ libvirt-1.0.1/src/Makefile.in	2013-01-22 10:43:01.684737396 -0600
+@@ -7343,9 +7343,6 @@
+ @WITH_NETWORK_TRUE@	    cp $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml.t \
+ @WITH_NETWORK_TRUE@	      $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml && \
+ @WITH_NETWORK_TRUE@	    rm $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/default.xml.t; }
+-@WITH_NETWORK_TRUE@	test -e $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/autostart/default.xml || \
+-@WITH_NETWORK_TRUE@	   ln -s ../default.xml \
+-@WITH_NETWORK_TRUE@	    $(DESTDIR)$(sysconfdir)/libvirt/qemu/networks/autostart/default.xml
+ 
+ uninstall-local:: uninstall-init uninstall-systemd
+ @WITH_LIBVIRTD_TRUE@	rmdir "$(DESTDIR)$(localstatedir)/lib/libvirt/lockd/files" ||:

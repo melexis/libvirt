@@ -1,0 +1,23 @@
+#
+# ssh session - specific symbols
+#
+
+# virnetsshsession.h
+#
+virNetSSHChannelRead;
+virNetSSHChannelWrite;
+virNetSSHSessionAuthAddAgentAuth;
+virNetSSHSessionAuthAddKeyboardAuth;
+virNetSSHSessionAuthAddPasswordAuth;
+virNetSSHSessionAuthAddPrivKeyAuth;
+virNetSSHSessionAuthReset;
+virNetSSHSessionAuthSetCallback;
+virNetSSHSessionConnect;
+virNetSSHSessionHasCachedData;
+virNetSSHSessionSetChannelCommand;
+virNetSSHSessionSetHostKeyVerification;
+
+# Let emacs know we want case-insensitive sorting
+# Local Variables:
+# sort-fold-case: t
+# End:

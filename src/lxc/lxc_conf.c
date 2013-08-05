@@ -1,0 +1,229 @@
+/*
+ * Copyright (C) 2010 Red Hat, Inc.
+ * Copyright IBM Corp. 2008
+ *
+ * lxc_conf.c: config functions for managing linux containers
+ *
+ * Authors:
+ *  David L. Leskovec <dlesko at linux.vnet.ibm.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ */
+
+/* includes */
+#include <config.h>
+
+#include "lxc_conf.h"
+#include "nodeinfo.h"
+#include "virerror.h"
+#include "virconf.h"
+#include "viralloc.h"
+#include "virlog.h"
+#include "viruuid.h"
+#include "configmake.h"
+#include "lxc_container.h"
+#include "virnodesuspend.h"
+
+
+#define VIR_FROM_THIS VIR_FROM_LXC
+
+static int lxcDefaultConsoleType(const char *ostype ATTRIBUTE_UNUSED,
+                                 virArch arch ATTRIBUTE_UNUSED)
+{
+    return VIR_DOMAIN_CHR_CONSOLE_TARGET_TYPE_LXC;
+}
+
+
+/* Functions */
+virCapsPtr lxcCapsInit(virLXCDriverPtr driver)
+{
+    virCapsPtr caps;
+    virCapsGuestPtr guest;
+    virArch altArch;
+
+    if ((caps = virCapabilitiesNew(virArchFromHost(),
+                                   0, 0)) == NULL)
+        goto error;
+
+    caps->defaultConsoleTargetType = lxcDefaultConsoleType;
+
+    /* Some machines have problematic NUMA toplogy causing
+     * unexpected failures. We don't want to break the QEMU
+     * driver in this scenario, so log errors & carry on
+     */
+    if (nodeCapsInitNUMA(caps) < 0) {
+        virCapabilitiesFreeNUMAInfo(caps);
+        VIR_WARN("Failed to query host NUMA topology, disabling NUMA capabilities");
+    }
+
+    if (virNodeSuspendGetTargetMask(&caps->host.powerMgmt) < 0)
+        VIR_WARN("Failed to get host power management capabilities");
+
+    if (virGetHostUUID(caps->host.host_uuid)) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       "%s", _("cannot get the host uuid"));
+        goto error;
+    }
+
+    /* XXX shouldn't 'borrow' KVM's prefix */
+    virCapabilitiesSetMacPrefix(caps, (unsigned char []){ 0x52, 0x54, 0x00 });
+
+    if ((guest = virCapabilitiesAddGuest(caps,
+                                         "exe",
+                                         caps->host.arch,
+                                         LIBEXECDIR "/libvirt_lxc",
+                                         NULL,
+                                         0,
+                                         NULL)) == NULL)
+        goto error;
+
+    if (virCapabilitiesAddGuestDomain(guest,
+                                      "lxc",
+                                      NULL,
+                                      NULL,
+                                      0,
+                                      NULL) == NULL)
+        goto error;
+
+    /* On 64-bit hosts, we can use personality() to request a 32bit process */
+    if ((altArch = lxcContainerGetAlt32bitArch(caps->host.arch)) != VIR_ARCH_NONE) {
+        if ((guest = virCapabilitiesAddGuest(caps,
+                                             "exe",
+                                             altArch,
+                                             LIBEXECDIR "/libvirt_lxc",
+                                             NULL,
+                                             0,
+                                             NULL)) == NULL)
+            goto error;
+
+        if (virCapabilitiesAddGuestDomain(guest,
+                                          "lxc",
+                                          NULL,
+                                          NULL,
+                                          0,
+                                          NULL) == NULL)
+            goto error;
+    }
+
+    /* LXC Requires an emulator in the XML */
+    virCapabilitiesSetEmulatorRequired(caps);
+
+    if (driver) {
+        /* Security driver data */
+        const char *doi, *model;
+
+        doi = virSecurityManagerGetDOI(driver->securityManager);
+        model = virSecurityManagerGetModel(driver->securityManager);
+        if (STRNEQ(model, "none")) {
+            /* Allocate just the primary security driver for LXC. */
+            if (VIR_ALLOC(caps->host.secModels) < 0)
+                goto no_memory;
+            caps->host.nsecModels = 1;
+            if (!(caps->host.secModels[0].model = strdup(model)))
+                goto no_memory;
+            if (!(caps->host.secModels[0].doi = strdup(doi)))
+                goto no_memory;
+        }
+
+        VIR_DEBUG("Initialized caps for security driver \"%s\" with "
+                  "DOI \"%s\"", model, doi);
+    } else {
+        VIR_INFO("No driver, not initializing security driver");
+    }
+
+    return caps;
+
+no_memory:
+    virReportOOMError();
+
+error:
+    virCapabilitiesFree(caps);
+    return NULL;
+}
+
+int lxcLoadDriverConfig(virLXCDriverPtr driver)
+{
+    char *filename;
+    virConfPtr conf;
+    virConfValuePtr p;
+
+    driver->securityDefaultConfined = false;
+    driver->securityRequireConfined = false;
+
+    /* Set the container configuration directory */
+    if ((driver->configDir = strdup(LXC_CONFIG_DIR)) == NULL)
+        goto no_memory;
+    if ((driver->stateDir = strdup(LXC_STATE_DIR)) == NULL)
+        goto no_memory;
+    if ((driver->logDir = strdup(LXC_LOG_DIR)) == NULL)
+        goto no_memory;
+    if ((driver->autostartDir = strdup(LXC_AUTOSTART_DIR)) == NULL)
+        goto no_memory;
+
+
+    if ((filename = strdup(SYSCONFDIR "/libvirt/lxc.conf")) == NULL)
+        goto no_memory;
+
+    /* Avoid error from non-existant or unreadable file. */
+    if (access(filename, R_OK) == -1)
+        goto done;
+    conf = virConfReadFile(filename, 0);
+    if (!conf)
+        goto done;
+
+#define CHECK_TYPE(name,typ) if (p && p->type != (typ)) {               \
+        virReportError(VIR_ERR_INTERNAL_ERROR,                          \
+                       "%s: %s: expected type " #typ,                   \
+                       filename, (name));                               \
+        virConfFree(conf);                                              \
+        return -1;                                                      \
+    }
+
+    p = virConfGetValue(conf, "log_with_libvirtd");
+    CHECK_TYPE("log_with_libvirtd", VIR_CONF_LONG);
+    if (p) driver->log_libvirtd = p->l;
+
+    p = virConfGetValue(conf, "security_driver");
+    CHECK_TYPE("security_driver", VIR_CONF_STRING);
+    if (p && p->str) {
+        if (!(driver->securityDriverName = strdup(p->str))) {
+            virReportOOMError();
+            virConfFree(conf);
+            return -1;
+        }
+    }
+
+    p = virConfGetValue(conf, "security_default_confined");
+    CHECK_TYPE("security_default_confined", VIR_CONF_LONG);
+    if (p) driver->securityDefaultConfined = p->l;
+
+    p = virConfGetValue(conf, "security_require_confined");
+    CHECK_TYPE("security_require_confined", VIR_CONF_LONG);
+    if (p) driver->securityRequireConfined = p->l;
+
+
+#undef CHECK_TYPE
+
+    virConfFree(conf);
+
+done:
+    VIR_FREE(filename);
+    return 0;
+
+no_memory:
+    virReportOOMError();
+    return -1;
+}

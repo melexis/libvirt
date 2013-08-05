@@ -1,0 +1,56 @@
+Index: libvirt-1.0.1/tools/Makefile.am
+===================================================================
+--- libvirt-1.0.1.orig/tools/Makefile.am	2013-01-22 10:43:03.488737366 -0600
++++ libvirt-1.0.1/tools/Makefile.am	2013-01-22 10:43:03.480737366 -0600
+@@ -5,8 +5,10 @@
+ 	-I$(top_builddir)/include -I$(top_srcdir)/include	\
+ 	-I$(top_builddir)/gnulib/lib -I$(top_srcdir)/gnulib/lib	\
+ 	-I$(top_builddir)/src -I$(top_srcdir)/src		\
++	-I$(top_srcdir)/src/remote				\
+ 	-I$(top_srcdir)/src/util				\
+ 	-I$(top_srcdir)						\
++	-DLOCAL_STATE_DIR=\""$(localstatedir)"\"                \
+ 	$(GETTEXT_CPPFLAGS)
+ 
+ POD2MAN = pod2man -c "Virtualization Support" -r "$(PACKAGE)-$(VERSION)"
+Index: libvirt-1.0.1/tools/Makefile.in
+===================================================================
+--- libvirt-1.0.1.orig/tools/Makefile.in	2013-01-22 10:43:03.488737366 -0600
++++ libvirt-1.0.1/tools/Makefile.in	2013-01-22 10:43:03.484737366 -0600
+@@ -1826,8 +1826,10 @@
+ 	-I$(top_builddir)/include -I$(top_srcdir)/include	\
+ 	-I$(top_builddir)/gnulib/lib -I$(top_srcdir)/gnulib/lib	\
+ 	-I$(top_builddir)/src -I$(top_srcdir)/src		\
++	-I$(top_srcdir)/src/remote				\
+ 	-I$(top_srcdir)/src/util				\
+ 	-I$(top_srcdir)						\
++	-DLOCAL_STATE_DIR=\""$(localstatedir)"\"                \
+ 	$(GETTEXT_CPPFLAGS)
+ 
+ POD2MAN = pod2man -c "Virtualization Support" -r "$(PACKAGE)-$(VERSION)"
+Index: libvirt-1.0.1/tools/virsh.c
+===================================================================
+--- libvirt-1.0.1.orig/tools/virsh.c	2013-01-22 10:43:03.488737366 -0600
++++ libvirt-1.0.1/tools/virsh.c	2013-01-22 10:43:03.484737366 -0600
+@@ -85,6 +85,8 @@
+ #include "virsh-snapshot.h"
+ #include "virsh-volume.h"
+ 
++#include "remote_driver.h"
++
+ static char *progname;
+ 
+ static const vshCmdGrp cmdGroups[];
+@@ -2978,7 +2980,11 @@
+ 
+     if ((defaultConn = getenv("VIRSH_DEFAULT_CONNECT_URI"))) {
+         ctl->name = vshStrdup(ctl, defaultConn);
+-    }
++    } else if (!access(LIBVIRTD_PRIV_UNIX_SOCKET, W_OK)) {
++		 ctl->name = vshStrdup(ctl, "qemu:///system");
++	} else {
++		ctl->name = vshStrdup(ctl, "qemu:///session");
++	}
+ 
+     if (!vshParseArgv(ctl, argc, argv)) {
+         vshDeinit(ctl);

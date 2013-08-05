@@ -1,0 +1,17 @@
+Description: use kvm-spice if available
+Author: Serge Hallyn <serge.hallyn@ubuntu.com>
+Forwarded: no
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/libvirt/+bug/903962
+
+Index: libvirt-1.0.1/src/qemu/qemu_capabilities.c
+===================================================================
+--- libvirt-1.0.1.orig/src/qemu/qemu_capabilities.c	2013-01-22 10:43:05.220737337 -0600
++++ libvirt-1.0.1/src/qemu/qemu_capabilities.c	2013-01-22 10:43:05.216737337 -0600
+@@ -674,6 +674,7 @@
+     if (qemuCapsIsValidForKVM(hostarch, guestarch)) {
+         const char *const kvmbins[] = { "/usr/libexec/qemu-kvm", /* RHEL */
+                                         "qemu-kvm", /* Fedora */
++										"kvm-spice", /* qemu-kvm-spice Ubuntu package */
+                                         "kvm" }; /* Upstream .spec */
+ 
+         for (i = 0; i < ARRAY_CARDINALITY(kvmbins); ++i) {

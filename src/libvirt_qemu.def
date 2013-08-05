@@ -1,0 +1,4 @@
+EXPORTS
+    virDomainQemuMonitorCommand
+    virDomainQemuAttach
+    virDomainQemuAgentCommand

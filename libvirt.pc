@@ -1,0 +1,15 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+datarootdir=${prefix}/share
+
+libvirt_api=${datarootdir}/libvirt/api/libvirt-api.xml
+libvirt_qemu_api=${datarootdir}/libvirt/api/libvirt-qemu-api.xml
+
+Name: libvirt
+Version: 1.0.2
+Description: libvirt library
+Requires:
+Libs: -L${libdir} -lvirt -ldl 
+Cflags: -I${includedir}
